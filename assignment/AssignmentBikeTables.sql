@@ -1,5 +1,57 @@
-drop table if exists a_bike_parts, 
-a_bike_repair, a_bike, a_customer, a_new_model, a_suppliers;
+--set search_path to "C21710971";
+
+--Vikas - owner "C21710971"
+
+--Kacper - mechanic "C21471486"
+
+--Euan - customer "C21493446"
+
+
+--this was used to find the sequence name for the table a_bike_repair and a_bike_parts since this is where the mechanic wil insert values
+select column_name, column_default
+from information_schema.columns
+where table_name = 'a_bike_repair' and column_name = 'repair_id';
+
+select column_name, column_default
+from information_schema.columns
+where table_name = 'a_bike_parts' and column_name = 'part_id';
+
+--permissions for the a_bike_repair
+grant usage, select on sequence a_bike_repair_repair_id_seq to "C21471486";
+
+grant insert on table a_bike_repair to "C21471486";
+
+--so mechanic could see the status of the bike and change it when fixed
+grant select on table a_bike to "C21471486";
+
+grant update on table a_bike to "C21471486";
+
+--mechanic needs to see the available parts and update if used or insert if ordered a new one
+grant select on table a_bike_parts to "C21471486";
+
+grant update on table a_bike_parts to "C21471486";
+
+--mechanic needs to order parts 
+grant usage, select on sequence a_bike_parts_part_id_seq to "C21471486";
+
+grant insert on table a_bike_parts to "C21471486";
+
+
+--in summary mechanic has a lot of permissions regarding managing bike repairs and part, but has no delete permissions
+
+--customer has only view permissions just to see new products or to track own bike's progress
+
+
+
+--small permissions for the customer to track the bike progress
+grant select on table a_customer to "C21493446";
+
+--extra permissions in case customer wants to see new upcoming bikes and their manufacturers, might want to buy it
+grant select on table a_new_model to "C21493446";
+
+grant select on table a_suppliers to "C21493446";
+
+
 
 --table for customers
 create table a_customer(
