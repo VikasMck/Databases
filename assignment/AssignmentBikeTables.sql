@@ -1,7 +1,6 @@
 --set search_path to "Bike857B";
 
-drop table if exists a_customer, a_bike, a_bike_parts, a_bike_repair, a_new_model, a_suppliers;
-
+--drop table if exists a_customer, a_bike, a_bike_parts, a_bike_repair, a_new_model, a_suppliers cascade;
 
 
 --Vikas - reception "C21710971"
@@ -10,7 +9,20 @@ drop table if exists a_customer, a_bike, a_bike_parts, a_bike_repair, a_new_mode
 
 --Euan - customer "C21493446"
 
+/*
+   _____           _     __  __             _____                 _       
+ |  __ \         | |   /_ |/_ |           / ____|               | |      
+ | |__) |_ _ _ __| |_   | | | |  ______  | |  __ _ __ __ _ _ __ | |_ ___ 
+ |  ___/ _` | '__| __|  | | | | |______| | | |_ | '__/ _` | '_ \| __/ __|
+ | |  | (_| | |  | |_   | |_| |          | |__| | | | (_| | | | | |_\__ \
+ |_|   \__,_|_|   \__|  |_(_)_|           \_____|_|  \__,_|_| |_|\__|___/
+                                                                                                                                              
+ */
+
+
 --usage grants
+
+/*
 grant usage on schema "Bike857B" to "C21493446";
 grant usage on schema "Bike857B" to "C21471486";
 grant usage on schema "Bike857B" to "C21710971";
@@ -57,10 +69,7 @@ grant select on table a_bike_parts to "C21710971";
 grant update on table a_bike_parts to "C21710971";
 
 --reception needs to add customers and change them
-grant update on table a_customer to "C21710971";
-grant insert on table a_customer to "C21710971";
-grant select on table a_customer to "C21710971";
-
+grant all on table a_customer to "C21710971";
 
 --reception needs to sees the suppliers and edit them
 grant all on table a_suppliers to "C21710971";
@@ -71,10 +80,14 @@ grant all on table a_new_model to "C21710971";
 --small permissions for the customer to track the bike progress
 grant select on table a_customer to "C21493446";
 
+--in case customer wants to add his repair via online then he inserts into this table
+grant insert on table a_customer to "C21493446";
+
 --extra permissions in case customer wants to see new upcoming bikes and their manufacturers, might want to buy it
 grant select on table a_new_model to "C21493446";
 grant select on table a_suppliers to "C21493446";
 
+*/
 
 --in summary mechanic has a lot of permissions regarding managing bike repairs and part, but has no delete permissions
 
@@ -83,8 +96,20 @@ grant select on table a_suppliers to "C21493446";
 --receptionist acts as a goods in when new parts or models come in, deals with customers
 
 
---table for customers
 
+/*
+  _____           _     __            _______    _     _           
+ |  __ \         | |   /_ |          |__   __|  | |   | |          
+ | |__) |_ _ _ __| |_   | |  ______     | | __ _| |__ | | ___  ___ 
+ |  ___/ _` | '__| __|  | | |______|    | |/ _` | '_ \| |/ _ \/ __|
+ | |  | (_| | |  | |_   | |             | | (_| | |_) | |  __/\__ \
+ |_|   \__,_|_|   \__|  |_|             |_|\__,_|_.__/|_|\___||___/
+                                                                                                           
+  */                         
+                           
+
+
+--table for customers
 create table a_customer(
     cust_id serial primary key,
     cust_name varchar(50) not null,
@@ -98,7 +123,7 @@ create table a_customer(
 create table a_bike(
     bike_id serial primary key,
     bike_model varchar(30),
-    bike_status char(1) not null check (bike_status in ('R', 'C', 'F')),
+    bike_status char(1) not null,
     --ensures that these are the only values allowed
     cust_id int references a_customer(cust_id)
 );
@@ -240,7 +265,123 @@ insert into a_new_model (model_name, supplier_id, bike_id) values
   ('City Bike', 2, 6),
   ('Mountain Bike', 1, 5);
 
+
+/*
+  _____           _     ___             _____                        _                    ___                     
+ |  __ \         | |   |__ \           |  __ \                      | |                  / / |                    
+ | |__) |_ _ _ __| |_     ) |  ______  | |__) | __ ___   ___ ___  __| |_   _ _ __ ___   / /| |     ___   __ _ ___ 
+ |  ___/ _` | '__| __|   / /  |______| |  ___/ '__/ _ \ / __/ _ \/ _` | | | | '__/ _ \ / / | |    / _ \ / _` / __|
+ | |  | (_| | |  | |_   / /_           | |   | | | (_) | (_|  __/ (_| | |_| | | |  __// /  | |___| (_) | (_| \__ \
+ |_|   \__,_|_|   \__| |____|          |_|   |_|  \___/ \___\___|\__,_|\__,_|_|  \___/_/   |______\___/ \__, |___/
+                                                                                                         __/ |                                                                                                           |___/     
+ */
+
+-- Create a table to log bike status changes
  
+--drop table bike_status_log; 
+
+create table bike_status_log (
+    log_id serial primary key,
+    bike_id int references a_bike(bike_id),
+    old_status char(1) not null,
+    new_status char(1) not null,
+    change_date timestamp
+);
+
+
+--drop procedure update_bike_status;
+
+--procedure for updating the status
+create or replace procedure update_bike_status(
+    in bike_id_to_change int,
+    in new_status char(1)
+    --in; inputs for the function
+)as
+$$
+declare
+	--declare local var
+    old_status char(1);
+begin
+	--get current status into new var
+	select bike_status into old_status
+    from a_bike
+    where bike_id = bike_id_to_change;
+	
+   	--check if they are not the same, if yes, allow the update
+	if new_status <> old_status then
+		update a_bike
+    	set bike_status = new_status
+    	where bike_id = bike_id_to_change;
+
+    	--for logging purposes
+		insert into bike_status_log (bike_id, old_status, new_status, change_date)
+		values (bike_id_to_change, (select bike_status from a_bike where bike_id = bike_id_to_change), new_status, now());
+	else
+		--else raise an exception
+        raise exception 'Status is unchanged.';
+    end if;
+exception
+	when others then
+        raise info 'Error Name:%', sqlerrm;
+
+end;
+$$ language plpgsql
+
+
+
+
+
+/*
+  _____           _     ____             _______   _                       
+ |  __ \         | |   |___ \           |__   __| (_)                      
+ | |__) |_ _ _ __| |_    __) |  ______     | |_ __ _  __ _  __ _  ___ _ __ 
+ |  ___/ _` | '__| __|  |__ <  |______|    | | '__| |/ _` |/ _` |/ _ \ '__|
+ | |  | (_| | |  | |_   ___) |             | | |  | | (_| | (_| |  __/ |   
+ |_|   \__,_|_|   \__| |____/              |_|_|  |_|\__, |\__, |\___|_|   
+                                                      __/ | __/ |          
+                                                     |___/ |___/           
+ */
+
+
+--could be avoided with simple line in table creation: bike_status char(1) not null check (bike_status in ('R', 'C', 'F')),
+--but for the assignment purposes, here's the trigger
+create or replace function bike_status_trigger()
+returns trigger as --return trigger type
+$$
+begin
+    if new.bike_status not in ('R', 'C', 'F') then
+        raise exception 'Invalid bike status';
+    end if;
+    return new; --if no issue with bike_status, allow the insert to continue
+end;
+$$ language plpgsql;
+
+--trigger than uses the trigger functions
+create trigger enforce_bike_status
+before insert or update
+on a_bike
+for each row
+execute function bike_status_trigger();
+
+
+
+/*
+  _____           _     _  _              _____                     _           _________        _       
+ |  __ \         | |   | || |            |_   _|                   | |         / /__   __|      | |      
+ | |__) |_ _ _ __| |_  | || |_   ______    | |  _ __  ___  ___ _ __| |_ ___   / /   | | ___  ___| |_ ___ 
+ |  ___/ _` | '__| __| |__   _| |______|   | | | '_ \/ __|/ _ \ '__| __/ __| / /    | |/ _ \/ __| __/ __|
+ | |  | (_| | |  | |_     | |             _| |_| | | \__ \  __/ |  | |_\__ \/ /     | |  __/\__ \ |_\__ \
+ |_|   \__,_|_|   \__|    |_|            |_____|_| |_|___/\___|_|   \__|___/_/      |_|\___||___/\__|___/                                                                                                        
+ */
+
+
+select * from bike_status_log;
+
+
+call update_bike_status(6, 'F');
+
+select * from a_Bike;
+
 select * from a_customer ac;
 select * from a_bike ab;
 select * from a_bike_parts abp;
@@ -253,6 +394,14 @@ full join a_bike ab using(cust_id)
 full join a_bike_repair abr using(bike_id)
 full join a_new_model anm using(bike_id)
 full join a_suppliers as2 using(supplier_id);
+
+
+
+
+
+
+
+
 
 
 
