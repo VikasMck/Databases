@@ -1,10 +1,24 @@
---set search_path to "C21710971";
+--set search_path to "Bike857B";
 
---Vikas - owner "C21710971"
+drop table if exists a_customer, a_bike, a_bike_parts, a_bike_repair, a_new_model, a_suppliers;
+
+
+
+--Vikas - reception "C21710971"
 
 --Kacper - mechanic "C21471486"
 
 --Euan - customer "C21493446"
+
+--usage grants
+grant usage on schema "Bike857B" to "C21493446";
+grant usage on schema "Bike857B" to "C21471486";
+grant usage on schema "Bike857B" to "C21710971";
+
+--sequences
+grant usage, select on sequence a_bike_repair_repair_id_seq to "C21471486"; --mechanic insert
+grant usage, select on sequence a_bike_parts_part_id_seq to "C21710971"; --bike parts insert reception
+grant usage, select on sequence a_customer_cust_id_seq to "C21710971"; --customer insert reception
 
 
 --this was used to find the sequence name for the table a_bike_repair and a_bike_parts since this is where the mechanic wil insert values
@@ -16,47 +30,65 @@ select column_name, column_default
 from information_schema.columns
 where table_name = 'a_bike_parts' and column_name = 'part_id';
 
---permissions for the a_bike_repair
-grant usage, select on sequence a_bike_repair_repair_id_seq to "C21471486";
+select column_name, column_default
+from information_schema.columns
+where table_name = 'a_customer' and column_name = 'cust_id';
 
-grant insert on table a_bike_repair to "C21471486";
 
---so mechanic could see the status of the bike and change it when fixed
+--permissions mechanic to see repairs
+grant select on table a_bike_repair to "C21471486";
+grant update on table a_bike_repair to "C21471486";
+
+--so mechanic could see the status of the bike and tell receptionist to change it
 grant select on table a_bike to "C21471486";
+grant update on table a_bike to "C21710971";
 
-grant update on table a_bike to "C21471486";
+--mechanic needs to see new bike models
+grant select on table a_new_model to "C21471486";
 
---mechanic needs to see the available parts and update if used or insert if ordered a new one
+--reception and mechanic needs to see the available parts and update if used
 grant select on table a_bike_parts to "C21471486";
+grant select on table a_bike_parts to "C21710971";
+grant update on table a_bike_parts to "C21710971";
 
-grant update on table a_bike_parts to "C21471486";
+--reception needs to order parts or update if they are used 
+grant insert on table a_bike_parts to "C21710971";
+grant select on table a_bike_parts to "C21710971";
+grant update on table a_bike_parts to "C21710971";
 
---mechanic needs to order parts 
-grant usage, select on sequence a_bike_parts_part_id_seq to "C21471486";
-
-grant insert on table a_bike_parts to "C21471486";
-
-
---in summary mechanic has a lot of permissions regarding managing bike repairs and part, but has no delete permissions
-
---customer has only view permissions just to see new products or to track own bike's progress
+--reception needs to add customers and change them
+grant update on table a_customer to "C21710971";
+grant insert on table a_customer to "C21710971";
+grant select on table a_customer to "C21710971";
 
 
+--reception needs to sees the suppliers and edit them
+grant all on table a_suppliers to "C21710971";
+
+--reception acts as goods in and oversees new models
+grant all on table a_new_model to "C21710971";
 
 --small permissions for the customer to track the bike progress
 grant select on table a_customer to "C21493446";
 
 --extra permissions in case customer wants to see new upcoming bikes and their manufacturers, might want to buy it
 grant select on table a_new_model to "C21493446";
-
 grant select on table a_suppliers to "C21493446";
 
 
+--in summary mechanic has a lot of permissions regarding managing bike repairs and part, but has no delete permissions
+
+--customer has only view permissions just to see new products or to track own bike's progress
+
+--receptionist acts as a goods in when new parts or models come in, deals with customers
+
 
 --table for customers
+
 create table a_customer(
     cust_id serial primary key,
     cust_name varchar(50) not null,
+    cust_email varchar(50) null,
     cust_phone_num varchar(20) not null,
     constraint unique_cust_info unique (cust_name, cust_phone_num) --this ensures that
     --2 customers will not have same number and vice versa
@@ -75,21 +107,21 @@ create table a_bike(
 create table a_bike_repair(
     repair_id serial primary key,
     bike_id int references a_bike(bike_id),
-	bike_repair_required varchar(255),
-	replaced_parts varchar(255),
-	bike_work_hours varchar(20)
+	bike_repair_required varchar(255) not null,
+	replaced_parts varchar(255) null,
+	bike_work_hours varchar(20) null
 );
 
 --not really needed but can stay
 create table a_suppliers (
     supplier_id serial primary key,
-    supplier_name varchar(255)
+    supplier_name varchar(255) null
 );
 
 --main table that has all parts
 create table a_bike_parts (
     part_id serial primary key,
-    part_name varchar(255),
+    part_name varchar(255) not null, 
     repair_id int references a_bike_repair(repair_id),
     --this line of code is for this "Parts can sometimes contain other parts
     --for example, the wheel will contain spokes, but a spoke can be provided separately."
@@ -99,34 +131,34 @@ create table a_bike_parts (
 --table which tracks new bike models
 create table a_new_model (
     model_id serial primary key,
-    model_name varchar(30),
+    model_name varchar(30) not null,
     bike_id int references a_bike(bike_id),
     supplier_id int references a_suppliers(supplier_id)
 );
 
 
 --randomly generated customers
-insert into a_customer (cust_name, cust_phone_num) values
-  ('Susan Lee', '+353861234567'),
-  ('David Smith', '0869876543'),
-  ('Linda Johnson', '+353875557890'),
-  ('James Brown', '0853217890'),
-  ('Emily Wilson', '+353864441122'),
-  ('Michael Anderson', '0875558888'),
-  ('Sophia Martin', '+353851113333'),
-  ('Joseph Thompson', '0869994444'),
-  ('Olivia White', '+353872225555'),
-  ('William Jones', '0851234567'),
-  ('John Doe', '0857772222'),
-  ('Mary Wilson', '+353868881111'),
-  ('Robert Jones', '0854443333'),
-  ('Laura Davis', '+353873335555'),
-  ('William Smith', '0852229999'),
-  ('Elizabeth Taylor', '+353869994444'),
-  ('Daniel Clark', '0875553333'),
-  ('Sarah Anderson', '+353854442222'),
-  ('James Thompson', '0856667777'),
-  ('Olivia Harris', '+353871118888');
+insert into a_customer (cust_name, cust_email, cust_phone_num) values
+  ('Susan Lee', 'SusLee@gmail.com', '+353861234567'),
+  ('David Smith', 'DaSmith@hotmail.ie', '0869876543'),
+  ('Linda Johnson', 'Linda321@gmail.com', '+353875557890'),
+  ('James Brown', 'Brownie@yahoo.com', '0853217890'),
+  ('Emily Wilson','theEmily@gmail.com', '+353864441122'),
+  ('Michael Anderson', 'MilkJak@gmai.com' ,'0875558888'),
+  ('Sophia Martin', null, '+353851113333'),
+  ('Joseph Thompson', 'jos@tudublin.ie','0869994444'),
+  ('Olivia White', 'cheeseifyouread@cheese.com', '+353872225555'),
+  ('William Jones', 'Willy@gmail.com,', '0851234567'),
+  ('John Doe', 'TheDoe@yahoo.com', '0857772222'),
+  ('Mary Wilson', 'TheWilMary@gmail.com' , '+353868881111'),
+  ('Robert Jones', 'ImRob@hotmail.com' ,'0854443333'),
+  ('Laura Davis', 'Bipolar@gmail.com' ,'+353873335555'),
+  ('William Smith', 'DadaSmuth@yahoo.com','0852229999'),
+  ('Elizabeth Taylor', 'nametoolong@gmail.com', '+353869994444'),
+  ('Daniel Clark', 'Clarkson@gmail.com','0875553333'),
+  ('Sarah Anderson', 'Sar1234556788@hotmail.com', '+353854442222'),
+  ('James Thompson', null, '0856667777'),
+  ('Olivia Harris', null, '+353871118888');
 
 --randomly generated bikes and their status
 insert into a_bike (bike_model, bike_status, cust_id) values
@@ -153,21 +185,21 @@ insert into a_bike (bike_model, bike_status, cust_id) values
 
 --randomly generated values
 insert into a_bike_repair (bike_id, bike_repair_required, replaced_parts, bike_work_hours) values
-  (5, 'Adjust Brakes', 'Brake Pads', '2.5 hours'),
-  (6, 'Tire Replacement', 'Tires', '1.2 hours'),
-  (7, 'Chain Lubrication', 'Chain', '0.8 hours'),
+  (5, 'Adjust Brakes', 'Brake Pads', null),
+  (6, 'Tire Replacement', 'Tires', null),
+  (7, 'Chain Lubrication', 'Chain', null),
   (8, 'Gear Adjustment', 'Gears', '1.5 hours'),
   (9, 'Battery Replacement', 'Battery', '3.0 hours'),
-  (10, 'Frame Welding', 'Welding Materials', '2.0 hours'),
+  (10, 'Frame Welding', 'Welding Materials', null),
   (11, 'Adjust Brakes', 'Brake Pads', '2.0 hours'),
-  (12, 'Tire Replacement', 'Tires', '1.2 hours'),
+  (12, 'Tire Replacement', 'Tires', null),
   (13, 'Chain Lubrication', 'Chain', '0.8 hours'),
-  (14, 'Gear Adjustment', 'Gears', '1.5 hours'),
+  (14, 'Gear Adjustment', 'Gears', null),
   (15, 'Battery Replacement', 'Battery', '3.0 hours'),
-  (16, 'Frame Welding', 'Welding Materials', '2.0 hours'),
+  (16, 'Frame Welding', 'Welding Materials', null),
   (17, 'Adjust Brakes', 'Brake Pads', '2.0 hours'),
   (18, 'Tire Replacement', 'Tires', '1.2 hours'),
-  (19, 'Chain Lubrication', 'Chain', '0.8 hours'),
+  (19, 'Chain Lubrication', 'Chain', null),
   (20, 'Gear Adjustment', 'Gears', '1.5 hours');
 
 
@@ -210,15 +242,15 @@ insert into a_new_model (model_name, supplier_id, bike_id) values
 
  
 select * from a_customer ac;
-select  * from a_bike ab;
+select * from a_bike ab;
 select * from a_bike_parts abp;
 select * from a_bike_repair abr;
 select * from a_new_model anm;
 select * from a_suppliers as2;
 
 select * from a_customer ac 
-join a_bike ab using(cust_id)
-join a_bike_repair abr using(bike_id)
+full join a_bike ab using(cust_id)
+full join a_bike_repair abr using(bike_id)
 full join a_new_model anm using(bike_id)
 full join a_suppliers as2 using(supplier_id);
 
