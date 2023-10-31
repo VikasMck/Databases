@@ -289,6 +289,8 @@ create table bike_status_log (
 );
 
 
+--this procedure allows me, the receptionist to quickly change the status of a bike when a mechanic tells me it is done while logging it
+
 --drop procedure update_bike_status;
 
 --procedure for updating the status
