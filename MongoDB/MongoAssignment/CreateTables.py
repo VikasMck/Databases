@@ -12,12 +12,12 @@ password = input("Enter password: ")
 uri = 'mongodb://'+username+':'+password+'@localhost:27017/?authSource=admin'
 client = MongoClient(uri)
 
-# Open the csv with 'r'
+#a different way that I learned with creating collections from csvs; prefer this than what is done during class/labs
+
+# opening the csv with reading
 with open('circuits.csv', 'r') as csv_file:
     csv_reader = csv.DictReader(csv_file)
     circuit_data = [row for row in csv_reader]
-
-
 
 with open('races.csv', 'r') as csv_file:
     csv_reader = csv.DictReader(csv_file)
@@ -25,7 +25,7 @@ with open('races.csv', 'r') as csv_file:
 
 mydb = client["Formula1"]
 
-#making a huge array just for easy access to data and testing' and drop() clears out the data after each run to avoid clogging
+#making a huge array just for easy access to data and testing
 mycol_cir_embedded = mydb["Circuits_Embedded"]
 mycol_cir_embedded.drop()
 
@@ -45,15 +45,21 @@ mycol_race_separate.drop()
 separate_circuits = []
 separate_races = []
 
+#collection that shows 1:M relationship
+mycol_years = mydb["Races_By_Year"]
+mycol_years.drop()
+
 
 for row in races_data:
     #there are a lot of \N values and the correct values are meant to be data therefore I need fancy functions to make it sure the values are kept as it is
     def parse_date(value):
         try:
+            #split the date into the regex format, and parse it - if it works great, else if the value is None or \N return None
             return datetime.strptime(value, '%y-%m-%d').date() if value and value != '\\N' else None
         except ValueError:
             return None
 
+    #check if the time is not None or is equal to \N - if so return None or keep the original value
     def parse_time(value):
         return value if value and value != '\\N' else None
 
@@ -115,10 +121,11 @@ for row in races_data:
     },
     
 }
+    #append to a separate list
     separate_races.append(races_entry)
 
-
-embedded_race_document = {"name": "Embedded Document Name", "races": separate_races}
+#making both embedded and separate collections
+embedded_race_document = {"name": "Embedded Document", "races": separate_races}
 
 mycol_race_embedded.insert_one(embedded_race_document)
 
@@ -151,13 +158,33 @@ for row in circuit_data:
 }
     separate_circuits.append(circuit_entry)
 
+#making both embedded and separate collections
 
-embedded_cir_document = {"name": "Embedded Document Name", "circuits": separate_circuits}
+embedded_cir_document = {"name": "Embedded Document", "circuits": separate_circuits}
 
 mycol_cir_embedded.insert_one(embedded_cir_document)
 
 mycol_cir_separate.insert_many(separate_circuits)
 
+
+
+#inserting the values into 1:M collection
+races_by_year = {}
+
+for row in separate_races:
+    year = row["year"]
+    
+    #append existing or..
+    if year in races_by_year:
+        races_by_year[year].append(row)
+    #make new value in the dict
+    else:
+        races_by_year[year] = [row]
+
+
+for year, races in races_by_year.items():
+    year_entry = {"year": year, "races": races}
+    mycol_years.insert_one(year_entry)
 
 
 
